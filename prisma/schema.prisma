@@ -12,9 +12,19 @@ generator client {
 
 datasource mongo {
   provider = "mongodb"
-  url = env("MONGODB_URI")
+  url = env("MONGO_URI")
 }
 
 model User {
   id String @id @default(auto()) @map("_id") @mongo.ObjectId
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  email String @unique
+  password String
+  profile Profile
+}
+
+type Profile {
+  firstName String
+  lastName String
 }
