@@ -1,5 +1,7 @@
-import { ActionFunction, json } from "@remix-run/node";
-import { login, register } from "~/utils/auth.server";
+import type { ActionFunction, LoaderFunction } from "@remix-run/node";
+import { getUser, login, register } from "~/utils/auth.server";
+import { json, redirect } from "@remix-run/node";
+import { useEffect, useRef, useState } from "react";
 import {
   validateEmail,
   validateName,
@@ -8,7 +10,12 @@ import {
 
 import { FormField } from "~/components/form-field";
 import { Layout } from "~/components/layout";
-import { useState } from "react";
+import { useActionData } from "@remix-run/react";
+
+export const loader: LoaderFunction = async ({ request }) => {
+  // If there's already a user in the session, redirect to the home page
+  return (await getUser(request)) ? redirect("/") : null;
+};
 
 export const action: ActionFunction = async ({ request }) => {
   const form = await request.formData();
@@ -18,6 +25,7 @@ export const action: ActionFunction = async ({ request }) => {
   let firstName = form.get("firstName");
   let lastName = form.get("lastName");
 
+  // If not all data was passed, error
   if (
     typeof action !== "string" ||
     typeof email !== "string" ||
@@ -26,6 +34,7 @@ export const action: ActionFunction = async ({ request }) => {
     return json({ error: `Invalid Form Data`, form: action }, { status: 400 });
   }
 
+  // If not all data was passed, error
   if (
     action === "register" &&
     (typeof firstName !== "string" || typeof lastName !== "string")
@@ -33,6 +42,7 @@ export const action: ActionFunction = async ({ request }) => {
     return json({ error: `Invalid Form Data`, form: action }, { status: 400 });
   }
 
+  // Validate email & password
   const errors = {
     email: validateEmail(email),
     password: validatePassword(password),
@@ -44,6 +54,7 @@ export const action: ActionFunction = async ({ request }) => {
       : {}),
   };
 
+  //  If there were any errors, return them
   if (Object.values(errors).some(Boolean))
     return json(
       {
@@ -69,14 +80,41 @@ export const action: ActionFunction = async ({ request }) => {
 };
 
 export default function Login() {
+  const actionData: any = useActionData();
+  const firstLoad = useRef(true);
   const [action, setAction] = useState("login");
-
+  const [errors, setErrors] = useState(actionData?.errors || {});
+  const [formError, setFormError] = useState(actionData?.error || "");
   const [formData, setFormData] = useState({
-    email: "",
-    firstName: "",
-    lastName: "",
-    password: "",
+    email: actionData?.fields?.email || "",
+    password: actionData?.fields?.password || "",
+    firstName: actionData?.fields?.firstName || "",
+    lastName: actionData?.fields?.lastName || "",
   });
+
+  useEffect(() => {
+    if (!firstLoad.current) {
+      const newState = {
+        email: "",
+        password: "",
+        firstName: "",
+        lastName: "",
+      };
+      setErrors(newState);
+      setFormError("");
+      setFormData(newState);
+    }
+  }, [action]);
+
+  useEffect(() => {
+    if (!firstLoad.current) {
+      setFormError("");
+    }
+  }, [formData]);
+
+  useEffect(() => {
+    firstLoad.current = false;
+  }, []);
 
   const handleInputChange = (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -97,11 +135,15 @@ export default function Login() {
             method='POST'
             className='flex flex-col items-center justify-center gap-4 rounded-3xl border border-gray-200 p-6 dark:border-gray-700'
           >
+            <div className='text-xs font-semibold text-center tracking-wide text-red-500 w-full'>
+              {formError}
+            </div>
             <FormField
               htmlFor='email'
               label='Email'
               value={formData.email}
               onChange={(e) => handleInputChange(e, "email")}
+              error={errors?.email}
             />
 
             {action === "register" && (
@@ -111,12 +153,14 @@ export default function Login() {
                   label='First Name'
                   onChange={(e) => handleInputChange(e, "firstName")}
                   value={formData.firstName}
+                  error={errors?.firstName}
                 />
                 <FormField
                   htmlFor='lastName'
                   label='Last Name'
                   onChange={(e) => handleInputChange(e, "lastName")}
                   value={formData.firstName}
+                  error={errors?.lastName}
                 />
               </>
             )}
@@ -127,6 +171,7 @@ export default function Login() {
               label='Password'
               value={formData.password}
               onChange={(e) => handleInputChange(e, "password")}
+              error={errors?.password}
             />
 
             <div className='w-full text-center'>
